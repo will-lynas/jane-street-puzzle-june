@@ -103,17 +103,42 @@ if len(valid) == 0:
 
 # Compute representative colors for each cluster
 cluster_colors = {}
+# Use a predefined palette of distinct colors for better visibility
+distinct_colors = [
+    (255, 0, 0),     # Pure Red
+    (0, 255, 0),     # Pure Green
+    (0, 0, 255),     # Pure Blue (only one blue)
+    (255, 255, 0),   # Pure Yellow
+    (255, 0, 255),   # Pure Magenta
+    (255, 128, 0),   # Orange
+    (128, 0, 255),   # Purple
+    (255, 255, 255), # White
+    (0, 0, 0),       # Black
+    (255, 192, 203), # Pink
+    (165, 42, 42),   # Brown
+    (128, 128, 128), # Gray
+    (255, 215, 0),   # Gold
+    (50, 205, 50),   # Lime Green
+    (148, 0, 211),   # Dark Violet
+    (255, 69, 0),    # Red Orange
+    (0, 100, 0),     # Dark Green
+    (139, 69, 19),   # Saddle Brown
+    (255, 182, 193), # Light Pink
+    (255, 20, 147),  # Deep Pink
+    (255, 228, 181), # Moccasin
+    (34, 139, 34),   # Forest Green
+    (128, 0, 0),     # Maroon
+    (255, 105, 180), # Hot Pink
+    (210, 180, 140), # Tan
+]
+
+color_idx = 0
 for label in unique_labels:
     if label == -1:  # noise
         continue
-    mask = labels_all == label
-    mean_lab = all_samples[mask].mean(axis=0)
-    # Convert Lab to RGB for visualization
-    lab_pixel = mean_lab.reshape(1, 1, 3)
-    rgb_pixel = color.lab2rgb(lab_pixel)
-    # Convert to BGR for OpenCV (0-255 range)
-    bgr_color = (rgb_pixel[0, 0] * 255)[::-1]  # RGB to BGR and scale to 0-255
-    cluster_colors[label] = tuple(int(c) for c in bgr_color)
+    # Assign distinct colors cyclically
+    cluster_colors[label] = distinct_colors[color_idx % len(distinct_colors)]
+    color_idx += 1
 
 if args.debug:
     print("🔍 Cluster colors:")
