@@ -8,4 +8,6 @@ dependencies = [
     "numpy>=2.3.0",
     "opencv-python>=4.11.0.86",
     "ortools>=9.13.4784",
+    "scikit-image>=0.25.2",
+    "scikit-learn>=1.7.0",
 ]
