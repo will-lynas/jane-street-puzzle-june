@@ -33,12 +33,12 @@ ap.add_argument("--tolerance", type=float, default=0.8, help="minimum fraction o
 args = ap.parse_args()
 
 # Create output directories
-os.makedirs("images-small-squares", exist_ok=True)
-os.makedirs("images-big-squares", exist_ok=True)
+os.makedirs("images/small-squares", exist_ok=True)
+os.makedirs("images/big-squares", exist_ok=True)
 
 # ────────────────────────────── file list ──────────────────────────────
 paths = sorted(
-    [p for ext in ("*.png", "*.jpg", "*.jpeg") for p in Path("images-transform").glob(ext)]
+    [p for ext in ("*.png", "*.jpg", "*.jpeg") for p in Path("images/transform").glob(ext)]
 )
 if not paths:
     sys.exit("❌  No images found in that directory.")
@@ -151,7 +151,7 @@ def create_small_squares_visualization(img, labels_slice, cluster_colors, filena
                             (0, 0, 0), 1)
     
     # Save the visualization
-    output_path = os.path.join("images-small-squares", filename)
+    output_path = os.path.join("images/small-squares", filename)
     cv2.imwrite(output_path, viz)
     print(f"   🔲 Saved small squares visualization: {output_path}")
 
@@ -280,7 +280,7 @@ for (img, lab_cells), p in zip(lab_by_img, paths):
                         (0, 0, 0), 1)
     
     # Save big squares visualization
-    big_squares_path = os.path.join("images-big-squares", p.name)
+    big_squares_path = os.path.join("images/big-squares", p.name)
     cv2.imwrite(big_squares_path, big_squares_viz)
     print(f"   🔳 Saved big squares visualization: {big_squares_path}")
 
