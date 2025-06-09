@@ -146,7 +146,7 @@ if args.debug:
         print(f"   Cluster {label}: BGR{bgr}")
 
 def create_small_squares_visualization(img, labels_slice, cluster_colors, filename):
-    """Create visualization where each small square has a colored mini-square in its center"""
+    """Create visualization where each small square has a colored mini-circle in its center"""
     cell = img.shape[0] // 45
     viz = img.copy()
     
@@ -158,22 +158,20 @@ def create_small_squares_visualization(img, labels_slice, cluster_colors, filena
                 y0 = r * cell
                 x0 = c * cell
                 
-                # Calculate mini-square size (50% of cell size)
-                mini_size = int(cell * 0.5)
+                # Calculate mini-circle radius (smaller than the previous squares)
+                mini_radius = int(cell * 0.2)  # 40% diameter (20% radius) of cell size
                 
-                # Calculate mini-square position (centered in cell)
-                mini_y0 = y0 + (cell - mini_size) // 2
-                mini_x0 = x0 + (cell - mini_size) // 2
-                mini_y1 = mini_y0 + mini_size
-                mini_x1 = mini_x0 + mini_size
+                # Calculate mini-circle center position
+                center_y = y0 + cell // 2
+                center_x = x0 + cell // 2
                 
-                # Draw solid colored mini-square
-                cv2.rectangle(viz, (mini_x0, mini_y0), (mini_x1, mini_y1), 
-                            cluster_colors[label], -1)
+                # Draw solid colored mini-circle
+                cv2.circle(viz, (center_x, center_y), mini_radius,
+                          cluster_colors[label], -1)
                 
-                # Add black border around mini-square for visibility
-                cv2.rectangle(viz, (mini_x0, mini_y0), (mini_x1, mini_y1), 
-                            (0, 0, 0), 1)
+                # Add black border around mini-circle for visibility
+                cv2.circle(viz, (center_x, center_y), mini_radius,
+                          (0, 0, 0), 1)
     
     # Save the visualization
     output_path = os.path.join("images/small-squares", filename)
