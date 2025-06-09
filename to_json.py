@@ -25,7 +25,7 @@ from sklearn.cluster import DBSCAN
 # ────────────────────────────── CLI ──────────────────────────────
 ap = argparse.ArgumentParser(description="Detect coloured n×n squares (batch, auto-colour).")
 ap.add_argument("--eps",    type=float, default=8.0, help="Lab radius for DBSCAN")
-ap.add_argument("--min",    type=int,   default=40,  help="min_samples for DBSCAN")
+ap.add_argument("--min",    type=int,   default=20,  help="min_samples for DBSCAN")
 ap.add_argument("--median", type=int,   default=3,   help="median window (odd)")
 ap.add_argument("--show",   action="store_true",     help="visual preview")
 ap.add_argument("--debug",  action="store_true",     help="detailed debugging")
