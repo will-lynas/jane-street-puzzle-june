@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import argparse, json, sys, cv2, glob, os
+import argparse, json, sys, cv2, glob, os, logging
 from pathlib import Path
 import numpy as np
 from collections import deque
@@ -12,6 +12,14 @@ from sklearn.cluster import DBSCAN
 ap = argparse.ArgumentParser(description="Detect coloured n×n squares (batch, auto-colour).")
 ap.add_argument("--debug",  action="store_true",     help="detailed debugging")
 args = ap.parse_args()
+
+# Set up logging
+log_level = logging.DEBUG if args.debug else logging.INFO
+logging.basicConfig(
+    level=log_level,
+    format='%(levelname)s: %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Hardcoded parameters
 # Lab radius for DBSCAN
@@ -32,9 +40,10 @@ paths = sorted(
     [p for ext in ("*.png", "*.jpg", "*.jpeg") for p in Path("images/transform").glob(ext)]
 )
 if not paths:
-    sys.exit("❌  No images found in that directory.")
+    logger.error("No images found in that directory.")
+    sys.exit(1)
 
-print(f"🔍 Found {len(paths)} images to process")
+logger.info(f"Found {len(paths)} images to process")
 
 # ────────────────────────────── pass 1 – collect Lab samples ──────────────────────────────
 lab_by_img = []
@@ -43,10 +52,12 @@ all_samples = []
 for p in paths:
     img = cv2.imread(str(p))
     if img is None:
-        sys.exit(f"❌  Cannot read {p}")
+        logger.error(f"Cannot read {p}")
+        sys.exit(1)
     H, W = img.shape[:2]
     if H % 45 or W != H:
-        sys.exit(f"❌  {p} is not square or not divisible by 45.")
+        logger.error(f"{p} is not square or not divisible by 45.")
+        sys.exit(1)
 
     cell = H // 45
     lab  = color.rgb2lab(cv2.cvtColor(img, cv2.COLOR_BGR2RGB) / 255.0)
@@ -63,10 +74,10 @@ for p in paths:
     all_samples.append(lab_cells.reshape(-1, 3))
 
 all_samples = np.concatenate(all_samples, axis=0)
-print(f"🔍 Collected {len(all_samples)} color samples from {len(paths)} images")
+logger.info(f"Collected {len(all_samples)} color samples from {len(paths)} images")
 
 # ────────────────────────────── global DBSCAN ──────────────────────────────
-print(f"🔍 Running DBSCAN with eps={eps}, min_samples={min_samples}")
+logger.info(f"Running DBSCAN with eps={eps}, min_samples={min_samples}")
 db = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(all_samples)
 labels_all = db.labels_                                      # shape = (N_cells_total,)
 
@@ -74,23 +85,22 @@ labels_all = db.labels_                                      # shape = (N_cells_
 unique_labels = np.unique(labels_all)
 n_clusters = len(unique_labels) - (1 if -1 in unique_labels else 0)
 n_noise = np.sum(labels_all == -1)
-print(f"🔍 DBSCAN found {n_clusters} clusters, {n_noise} noise points")
+logger.info(f"DBSCAN found {n_clusters} clusters, {n_noise} noise points")
 
-if args.debug:
-    for label in unique_labels:
-        count = np.sum(labels_all == label)
-        if label == -1:
-            print(f"   Noise: {count} points")
-        else:
-            print(f"   Cluster {label}: {count} points")
+for label in unique_labels:
+    count = np.sum(labels_all == label)
+    if label == -1:
+        logger.debug(f"   Noise: {count} points")
+    else:
+        logger.debug(f"   Cluster {label}: {count} points")
 
 # background cluster = largest non-noise label
 valid = labels_all[labels_all >= 0]
 bg_label = np.bincount(valid).argmax() if len(valid) else -1
-print(f"🔍 Background cluster identified as label {bg_label}")
+logger.info(f"Background cluster identified as label {bg_label}")
 
 if len(valid) == 0:
-    print("⚠️  WARNING: All points classified as noise! Try reducing --eps or --min")
+    logger.warning("All points classified as noise! Try reducing --eps or --min")
 
 # Compute representative colors for each cluster
 cluster_colors = {}
@@ -131,10 +141,9 @@ for label in unique_labels:
     cluster_colors[label] = distinct_colors[color_idx % len(distinct_colors)]
     color_idx += 1
 
-if args.debug:
-    print("🔍 Cluster colors:")
-    for label, bgr in cluster_colors.items():
-        print(f"   Cluster {label}: BGR{bgr}")
+logger.debug("Cluster colors:")
+for label, bgr in cluster_colors.items():
+    logger.debug(f"   Cluster {label}: BGR{bgr}")
 
 def create_small_squares_visualization(img, labels_slice, cluster_colors, filename):
     """Create visualization where each small square has a colored mini-circle in its center"""
@@ -170,19 +179,17 @@ def create_small_squares_visualization(img, labels_slice, cluster_colors, filena
     # Save the visualization
     output_path = os.path.join("images/small-squares", filename)
     cv2.imwrite(output_path, viz)
-    print(f"   🔲 Saved small squares visualization: {output_path}")
+    logger.debug(f"Saved small squares visualization: {output_path}")
 
 # helper: turn slice of labels into 45×45 grid with 0 = background
 def slice_to_grid(slice_labels, median_win):
     g = slice_labels.reshape(45, 45)
     g = np.where(g == bg_label, 0, g + 1)                    # zero for wood
-    if args.debug:
-        unique_before = np.unique(g)
-        print(f"   Grid before median filter: {len(unique_before)} unique values: {unique_before}")
+    unique_before = np.unique(g)
+    logger.debug(f"   Grid before median filter: {len(unique_before)} unique values: {unique_before}")
     result = median_filter(g, median_win) if median_win > 1 else g
-    if args.debug:
-        unique_after = np.unique(result)
-        print(f"   Grid after median filter: {len(unique_after)} unique values: {unique_after}")
+    unique_after = np.unique(result)
+    logger.debug(f"   Grid after median filter: {len(unique_after)} unique values: {unique_after}")
     return result
 
 # ────────────────────────────── square extractor ──────────────────────────────
@@ -190,10 +197,9 @@ def squares_from_grid(grid, slice_labels):
     seen, res = np.zeros_like(grid, bool), []
     components_found = 0
     
-    if args.debug:
-        print(f"   Searching for squares in {45}x{45} grid...")
-        non_zero = np.sum(grid != 0)
-        print(f"   Grid has {non_zero} non-background cells")
+    logger.debug(f"   Searching for squares in {45}x{45} grid...")
+    non_zero = np.sum(grid != 0)
+    logger.debug(f"   Grid has {non_zero} non-background cells")
     
     for r in range(45):
         for c in range(45):
@@ -217,8 +223,7 @@ def squares_from_grid(grid, slice_labels):
             w = max(cols)-min(cols)+1
             area = len(rows)
             
-            if args.debug:
-                print(f"   Component {components_found}: color={color_value}, h={h}, w={w}, area={area}, expected_area={h*h}")
+            logger.debug(f"   Component {components_found}: color={color_value}, h={h}, w={w}, area={area}, expected_area={h*h}")
             
             min_area = int(h * h * tolerance)
             if h == w and 2 <= h <= 9 and area >= min_area:      # solid-ish n×n
@@ -231,9 +236,8 @@ def squares_from_grid(grid, slice_labels):
                 
                 square = {"x": bl_x, "y": bl_y, "size": h, "cluster": int(original_label)}
                 res.append(square)
-                if args.debug:
-                    print(f"   ✅ Valid square found: {square} (area={area}, min_required={min_area})")
-            elif args.debug:
+                logger.debug(f"   ✅ Valid square found: {square} (area={area}, min_required={min_area})")
+            else:
                 reasons = []
                 if h != w:
                     reasons.append(f"not square (h={h}, w={w})")
@@ -241,10 +245,9 @@ def squares_from_grid(grid, slice_labels):
                     reasons.append(f"size out of range (h={h})")
                 if area < min_area:
                     reasons.append(f"not solid enough (area={area}, min_required={min_area})")
-                print(f"   ❌ Rejected: {', '.join(reasons)}")
+                logger.debug(f"   ❌ Rejected: {', '.join(reasons)}")
     
-    if args.debug:
-        print(f"   Found {components_found} total components, {len(res)} valid squares")
+    logger.debug(f"   Found {components_found} total components, {len(res)} valid squares")
     
     return res
 
@@ -253,18 +256,17 @@ results, offset = {}, 0
 cells_per_img = 45*45
 
 for (img, lab_cells), p in zip(lab_by_img, paths):
-    print(f"\n🔍 Processing {p.name}...")
+    logger.info(f"Processing {p.name}...")
     labels_slice = labels_all[offset: offset + cells_per_img]
     offset += cells_per_img
 
-    if args.debug:
-        unique_slice_labels = np.unique(labels_slice)
-        print(f"   Labels in this image: {unique_slice_labels}")
+    unique_slice_labels = np.unique(labels_slice)
+    logger.debug(f"   Labels in this image: {unique_slice_labels}")
 
     grid    = slice_to_grid(labels_slice, median_window)
     squares = squares_from_grid(grid, labels_slice)
     results[p.name] = squares
-    print(f"{p.name:>25}: {len(squares):2} squares")
+    logger.info(f"{p.name:>25}: {len(squares):2} squares")
 
     # Create small squares visualization (each cell colored by cluster)
     create_small_squares_visualization(img, labels_slice, cluster_colors, p.name)
@@ -299,7 +301,7 @@ for (img, lab_cells), p in zip(lab_by_img, paths):
     # Save big squares visualization
     big_squares_path = os.path.join("images/big-squares", p.name)
     cv2.imwrite(big_squares_path, big_squares_viz)
-    print(f"   🔳 Saved big squares visualization: {big_squares_path}")
+    logger.debug(f"Saved big squares visualization: {big_squares_path}")
 
 # ────────────────────────────── save JSON ──────────────────────────────
 # Remove cluster info from final JSON output
@@ -310,4 +312,4 @@ for img_name, squares in results.items():
 
 with open("squares.json", "w") as f:
     json.dump(results, f, indent=2)
-print(f"✅  wrote {len(results)} image entries → squares.json")
+logger.info(f"wrote {len(results)} image entries → squares.json")
