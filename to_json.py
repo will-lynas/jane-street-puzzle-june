@@ -144,25 +144,28 @@ def create_small_squares_visualization(img, labels_slice, cluster_colors, filena
     for r in range(45):
         for c in range(45):
             label = labels_slice[r * 45 + c]
-            if label in cluster_colors:
-                # Calculate cell boundaries
-                y0 = r * cell
-                x0 = c * cell
+            # Skip drawing circles on background cells
+            if label == bg_label or label not in cluster_colors:
+                continue
                 
-                # Calculate mini-circle radius (smaller than the previous squares)
-                mini_radius = int(cell * 0.2)  # 40% diameter (20% radius) of cell size
-                
-                # Calculate mini-circle center position
-                center_y = y0 + cell // 2
-                center_x = x0 + cell // 2
-                
-                # Draw solid colored mini-circle
-                cv2.circle(viz, (center_x, center_y), mini_radius,
-                          cluster_colors[label], -1)
-                
-                # Add black border around mini-circle for visibility
-                cv2.circle(viz, (center_x, center_y), mini_radius,
-                          (0, 0, 0), 1)
+            # Calculate cell boundaries
+            y0 = r * cell
+            x0 = c * cell
+            
+            # Calculate mini-circle radius (smaller than the previous squares)
+            mini_radius = int(cell * 0.2)  # 40% diameter (20% radius) of cell size
+            
+            # Calculate mini-circle center position
+            center_y = y0 + cell // 2
+            center_x = x0 + cell // 2
+            
+            # Draw solid colored mini-circle
+            cv2.circle(viz, (center_x, center_y), mini_radius,
+                      cluster_colors[label], -1)
+            
+            # Add black border around mini-circle for visibility
+            cv2.circle(viz, (center_x, center_y), mini_radius,
+                      (0, 0, 0), 1)
     
     # Save the visualization
     output_path = os.path.join("images/small-squares", filename)
