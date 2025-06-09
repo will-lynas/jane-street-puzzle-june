@@ -1,18 +1,4 @@
 #!/usr/bin/env python3
-"""
-detect_squares_batch_auto.py – same output format as before, but colour
-clusters are learned automatically with DBSCAN.
-
-Example
-    python detect_squares_batch_auto.py warped_dir  all_squares.json
-
-Options
-    --eps  8.0     Lab distance threshold for DBSCAN  (default 8.0)
-    --min  40      min_samples for DBSCAN             (default 40)
-    --median 3     median-filter window on the 45×45 label grid
-    --show         show a green-box preview per image
-    --debug        show detailed debugging information
-"""
 
 import argparse, json, sys, cv2, glob, os
 from pathlib import Path
@@ -24,13 +10,18 @@ from sklearn.cluster import DBSCAN
 
 # ────────────────────────────── CLI ──────────────────────────────
 ap = argparse.ArgumentParser(description="Detect coloured n×n squares (batch, auto-colour).")
-ap.add_argument("--eps",    type=float, default=8.0, help="Lab radius for DBSCAN")
-ap.add_argument("--min",    type=int,   default=20,  help="min_samples for DBSCAN")
-ap.add_argument("--median", type=int,   default=3,   help="median window (odd)")
-ap.add_argument("--show",   action="store_true",     help="visual preview")
 ap.add_argument("--debug",  action="store_true",     help="detailed debugging")
-ap.add_argument("--tolerance", type=float, default=0.8, help="minimum fraction of expected area for valid squares (default: 0.8)")
 args = ap.parse_args()
+
+# Hardcoded parameters
+# Lab radius for DBSCAN
+eps = 8.0
+# min_samples for DBSCAN
+min_samples = 20
+# median window (odd)
+median_window = 3
+# minimum fraction of expected area for valid squares
+tolerance = 0.8
 
 # Create output directories
 os.makedirs("images/small-squares", exist_ok=True)
@@ -75,8 +66,8 @@ all_samples = np.concatenate(all_samples, axis=0)
 print(f"🔍 Collected {len(all_samples)} color samples from {len(paths)} images")
 
 # ────────────────────────────── global DBSCAN ──────────────────────────────
-print(f"🔍 Running DBSCAN with eps={args.eps}, min_samples={args.min}")
-db = DBSCAN(eps=args.eps, min_samples=args.min, metric="euclidean").fit(all_samples)
+print(f"🔍 Running DBSCAN with eps={eps}, min_samples={min_samples}")
+db = DBSCAN(eps=eps, min_samples=min_samples, metric="euclidean").fit(all_samples)
 labels_all = db.labels_                                      # shape = (N_cells_total,)
 
 # Debug DBSCAN results
@@ -226,7 +217,7 @@ def squares_from_grid(grid, slice_labels):
             if args.debug:
                 print(f"   Component {components_found}: color={color_value}, h={h}, w={w}, area={area}, expected_area={h*h}")
             
-            min_area = int(h * h * args.tolerance)
+            min_area = int(h * h * tolerance)
             if h == w and 2 <= h <= 9 and area >= min_area:      # solid-ish n×n
                 bl_x = min(cols)
                 bl_y = 44 - max(rows)                       # origin bottom-left
@@ -267,7 +258,7 @@ for (img, lab_cells), p in zip(lab_by_img, paths):
         unique_slice_labels = np.unique(labels_slice)
         print(f"   Labels in this image: {unique_slice_labels}")
 
-    grid    = slice_to_grid(labels_slice, args.median)
+    grid    = slice_to_grid(labels_slice, median_window)
     squares = squares_from_grid(grid, labels_slice)
     results[p.name] = squares
     print(f"{p.name:>25}: {len(squares):2} squares")
@@ -306,11 +297,6 @@ for (img, lab_cells), p in zip(lab_by_img, paths):
     big_squares_path = os.path.join("images/big-squares", p.name)
     cv2.imwrite(big_squares_path, big_squares_viz)
     print(f"   🔳 Saved big squares visualization: {big_squares_path}")
-
-    if args.show:
-        cv2.imshow(f"Small squares - {p.name}", cv2.resize(big_squares_viz, (800, 800)))
-        cv2.waitKey(0)
-        cv2.destroyWindow(f"Small squares - {p.name}")
 
 # ────────────────────────────── save JSON ──────────────────────────────
 # Remove cluster info from final JSON output
