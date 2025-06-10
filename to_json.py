@@ -3,7 +3,6 @@
 import argparse, json, sys, cv2, glob, os, logging
 from pathlib import Path
 import numpy as np
-from collections import deque
 from skimage import color
 from scipy.ndimage import median_filter
 from sklearn.cluster import DBSCAN
@@ -28,12 +27,9 @@ eps = 8.0
 min_samples = 20
 # median window (odd)
 median_window = 3
-# minimum fraction of expected area for valid squares
-tolerance = 0.8
 
-# Create output directories
+# Create output directory
 os.makedirs("images/small-squares", exist_ok=True)
-os.makedirs("images/big-squares", exist_ok=True)
 
 # ────────────────────────────── file list ──────────────────────────────
 paths = sorted(
@@ -192,65 +188,6 @@ def slice_to_grid(slice_labels, median_win):
     logger.debug(f"   Grid after median filter: {len(unique_after)} unique values: {unique_after}")
     return result
 
-# ────────────────────────────── square extractor ──────────────────────────────
-def squares_from_grid(grid, slice_labels):
-    seen, res = np.zeros_like(grid, bool), []
-    components_found = 0
-    
-    logger.debug(f"   Searching for squares in {45}x{45} grid...")
-    non_zero = np.sum(grid != 0)
-    logger.debug(f"   Grid has {non_zero} non-background cells")
-    
-    for r in range(45):
-        for c in range(45):
-            if grid[r, c] == 0 or seen[r, c]:
-                continue
-            q = deque([(r, c)])
-            seen[r, c] = True
-            rows, cols = [], []
-            color_value = grid[r, c]
-            
-            while q:
-                y, x = q.popleft()
-                rows.append(y); cols.append(x)
-                for dy, dx in ((1,0),(-1,0),(0,1),(0,-1)):
-                    ny, nx = y+dy, x+dx
-                    if 0<=ny<45 and 0<=nx<45 and not seen[ny,nx] and grid[ny,nx]==grid[r,c]:
-                        seen[ny,nx]=True; q.append((ny,nx))
-            
-            components_found += 1
-            h = max(rows)-min(rows)+1
-            w = max(cols)-min(cols)+1
-            area = len(rows)
-            
-            logger.debug(f"   Component {components_found}: color={color_value}, h={h}, w={w}, area={area}, expected_area={h*h}")
-            
-            min_area = int(h * h * tolerance)
-            if h == w and 2 <= h <= 9 and area >= min_area:      # solid-ish n×n
-                bl_x = min(cols)
-                bl_y = 44 - max(rows)                       # origin bottom-left
-                
-                # Find the original cluster label for this square
-                center_r, center_c = min(rows) + h//2, min(cols) + w//2
-                original_label = slice_labels[center_r * 45 + center_c]
-                
-                square = {"x": bl_x, "y": bl_y, "size": h, "cluster": int(original_label)}
-                res.append(square)
-                logger.debug(f"   ✅ Valid square found: {square} (area={area}, min_required={min_area})")
-            else:
-                reasons = []
-                if h != w:
-                    reasons.append(f"not square (h={h}, w={w})")
-                if not (2 <= h <= 9):
-                    reasons.append(f"size out of range (h={h})")
-                if area < min_area:
-                    reasons.append(f"not solid enough (area={area}, min_required={min_area})")
-                logger.debug(f"   ❌ Rejected: {', '.join(reasons)}")
-    
-    logger.debug(f"   Found {components_found} total components, {len(res)} valid squares")
-    
-    return res
-
 # ────────────────────────────── pass 2 – per-image detection ──────────────────────────────
 results, offset = {}, 0
 cells_per_img = 45*45
@@ -263,53 +200,50 @@ for (img, lab_cells), p in zip(lab_by_img, paths):
     unique_slice_labels = np.unique(labels_slice)
     logger.debug(f"   Labels in this image: {unique_slice_labels}")
 
-    grid    = slice_to_grid(labels_slice, median_window)
-    squares = squares_from_grid(grid, labels_slice)
-    results[p.name] = squares
-    logger.info(f"{p.name:>25}: {len(squares):2} squares")
-
+    grid = slice_to_grid(labels_slice, median_window)
+    
     # Create small squares visualization (each cell colored by cluster)
     create_small_squares_visualization(img, labels_slice, cluster_colors, p.name)
     
-    # Create big squares visualization (detected squares with colored centers)
-    cell = img.shape[0] // 45
-    big_squares_viz = img.copy()
-    for s in squares:
-        x0 = s["x"] * cell
-        y0 = (44 - s["y"] - s["size"] + 1) * cell
-        x1 = x0 + s["size"] * cell
-        y1 = y0 + s["size"] * cell
-        
-        # Draw green rectangle outline
-        cv2.rectangle(big_squares_viz, (x0, y0), (x1, y1), (0, 255, 0), 2)
-        
-        # Draw colored center indicator
-        if s["cluster"] in cluster_colors:
-            center_x = (x0 + x1) // 2
-            center_y = (y0 + y1) // 2
-            indicator_size = max(2, cell // 3)  # Scale indicator with cell size
-            cv2.rectangle(big_squares_viz, 
-                        (center_x - indicator_size, center_y - indicator_size),
-                        (center_x + indicator_size, center_y + indicator_size),
-                        cluster_colors[s["cluster"]], -1)
-            # Add black border around indicator for visibility
-            cv2.rectangle(big_squares_viz, 
-                        (center_x - indicator_size, center_y - indicator_size),
-                        (center_x + indicator_size, center_y + indicator_size),
-                        (0, 0, 0), 1)
+    # Group cells by color
+    color_groups = {}
+    color_counter = 1
     
-    # Save big squares visualization
-    big_squares_path = os.path.join("images/big-squares", p.name)
-    cv2.imwrite(big_squares_path, big_squares_viz)
-    logger.debug(f"Saved big squares visualization: {big_squares_path}")
+    for r in range(45):
+        for c in range(45):
+            color_value = grid[r, c]
+            if color_value == 0:  # skip background
+                continue
+                
+            # Create color name if not seen before
+            if color_value not in color_groups:
+                color_groups[color_value] = f"color{color_counter}"
+                color_counter += 1
+    
+    # Build result structure for this image
+    image_result = {}
+    for color_value, color_name in color_groups.items():
+        image_result[color_name] = []
+    
+    # Add coordinates for each non-background cell
+    for r in range(45):
+        for c in range(45):
+            color_value = grid[r, c]
+            if color_value == 0:  # skip background
+                continue
+                
+            color_name = color_groups[color_value]
+            # Bottom-left coordinates
+            coord = {"x": c, "y": 44 - r}
+            image_result[color_name].append(coord)
+    
+    results[p.name] = image_result
+    
+    # Log summary
+    total_squares = sum(len(coords) for coords in image_result.values())
+    logger.info(f"{p.name:>25}: {len(image_result)} colors, {total_squares} total squares")
 
 # ────────────────────────────── save JSON ──────────────────────────────
-# Remove cluster info from final JSON output
-for img_name, squares in results.items():
-    for square in squares:
-        if 'cluster' in square:
-            del square['cluster']
-
 with open("squares.json", "w") as f:
     json.dump(results, f, indent=2)
 logger.info(f"wrote {len(results)} image entries → squares.json")
