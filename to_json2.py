@@ -16,7 +16,7 @@ Keys while running
 
 Output
 ------
-JSON file is written next to the image with the same name but .json extension.
+JSON file is written to a json/ folder next to the script.
 Format:
 
 {
@@ -89,15 +89,17 @@ class Annotator:
         top  = min(row0, row1)
         dx   = abs(col1 - col0)
         dy   = abs(row1 - row0)
+        size = max(dx, dy) + 1  # make it a square using the larger dimension
 
-        if dx != dy:
-            print('❌ Not a square – ignored')
-            return
-        size = dx + 1      # include both endpoints
-
-        if left + size > CELL_COUNT or top + size > CELL_COUNT:
-            print('❌ Square extends outside grid – ignored')
-            return
+        # clamp to grid bounds (same logic as preview)
+        if left + size > CELL_COUNT:
+            left = CELL_COUNT - size
+        if top + size > CELL_COUNT:
+            top = CELL_COUNT - size
+        if left < 0:
+            left = 0
+        if top < 0:
+            top = 0
 
         # overlap check
         for (l, t, s) in self.squares:
@@ -162,7 +164,9 @@ class Annotator:
 
     def save_json(self):
         json_data = self.to_json_entry()
-        json_file = self.img_path.with_suffix('.json')
+        json_dir = Path(__file__).parent / 'json'
+        json_dir.mkdir(exist_ok=True)
+        json_file = json_dir / f"{self.img_path.stem}.json"
         with open(json_file, 'w', encoding='utf-8') as fh:
             json.dump(json_data, fh, indent=2, sort_keys=False)
         print(f'💾 Saved {json_file.name}')
