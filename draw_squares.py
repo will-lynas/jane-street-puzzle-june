@@ -45,18 +45,18 @@ def draw_square_with_cross(draw, bottom_left_x, bottom_left_y, size, color, grid
     draw.rectangle([
         pixel_x, pixel_y,
         pixel_x + square_width, pixel_y + square_height
-    ], outline=color, width=4)
+    ], outline=color, width=6)
     
     # Draw diagonal cross
     draw.line([
         pixel_x, pixel_y,
         pixel_x + square_width, pixel_y + square_height
-    ], fill=color, width=1)
+    ], fill=color, width=6)
     
     draw.line([
         pixel_x + square_width, pixel_y,
         pixel_x, pixel_y + square_height
-    ], fill=color, width=1)
+    ], fill=color, width=6)
 
 def process_image(json_file_path, image_file_path, output_path):
     """Process a single JSON file and corresponding image"""
