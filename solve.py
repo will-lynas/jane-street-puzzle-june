@@ -86,16 +86,7 @@ def pack_fixed_container(B: int, sides, preplaced):
     # 4 ▸ global non-overlap
     model.AddNoOverlap2D(x_ints, y_ints)
 
-    # 5 ▸ symmetry break: anchor one 9×9 in a corner if unfixed
-    try:
-        anchor = sides.index(9)
-        if not (x[anchor].HasValue() and y[anchor].HasValue()):
-            model.Add(x[anchor] == 0)
-            model.Add(y[anchor] == 0)
-    except ValueError:
-        pass  # should never happen (we have nine 9×9s)
-
-    # 6 ▸ solve for all solutions
+    # 5 ▸ solve for all solutions
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 60
     solver.parameters.num_search_workers = 8
