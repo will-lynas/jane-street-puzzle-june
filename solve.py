@@ -65,7 +65,6 @@ def pack_fixed_container(B: int, sides, preplaced):
     y = [model.NewIntVar(0, B - s, f"y{i}") for i, s in enumerate(sides)]
 
     # 2 ▸ respect user-fixed squares
-    #     greedy assignment: first unused square of matching size is fixed
     used = [False] * n
     for size, fx, fy in preplaced:
         for i, s in enumerate(sides):
@@ -77,23 +76,34 @@ def pack_fixed_container(B: int, sides, preplaced):
         else:
             raise ValueError(f"No unused square of size {size} left to fix at {(fx, fy)}")
 
-    # 3 ▸ interval views
-    x_ints, y_ints = [], []
+    # 3 ▸ interval variables for NoOverlap2D
+    x_intervals = []
+    y_intervals = []
     for i, s in enumerate(sides):
-        x_ints.append(model.NewIntervalVar(x[i], s, x[i] + s, f"x_int{i}"))
-        y_ints.append(model.NewIntervalVar(y[i], s, y[i] + s, f"y_int{i}"))
+        x_intervals.append(model.NewIntervalVar(x[i], s, x[i] + s, f"x_interval_{i}"))
+        y_intervals.append(model.NewIntervalVar(y[i], s, y[i] + s, f"y_interval_{i}"))
 
-    # 4 ▸ global non-overlap
-    model.AddNoOverlap2D(x_ints, y_ints)
+    # 4 ▸ non-overlap constraint
+    model.AddNoOverlap2D(x_intervals, y_intervals)
 
-    # 5 ▸ solve for all solutions
+    print(f"Created {len(x_intervals)} interval variables")
+    print(f"Model validation: {model.Validate()}")
+
+    # 5 ▸ solve for solutions
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 60
-    solver.parameters.num_search_workers = 8
-    solver.parameters.enumerate_all_solutions = True
+    solver.parameters.max_time_in_seconds = 30
+    solver.parameters.num_search_workers = 4
+    # Don't enumerate all solutions initially - just find one
+    # solver.parameters.enumerate_all_solutions = True
     
     solution_collector = SolutionCollector(x, y, sides)
-    status = solver.SearchForAllSolutions(model, solution_collector)
+    status = solver.Solve(model, solution_collector)
+    
+    print(f"Solver status: {solver.StatusName(status)}")
+    print(f"Solver statistics:")
+    print(f"  - Branches: {solver.NumBranches()}")
+    print(f"  - Conflicts: {solver.NumConflicts()}")
+    print(f"  - Wall time: {solver.WallTime():.3f}s")
 
     return solution_collector.solution_count
 
@@ -113,6 +123,8 @@ if __name__ == "__main__":
         print(f"Loading preplaced squares from: {json_filename}")
         print(f"Found {len(preplaced)} preplaced squares")
     
+    print(f"Squares to pack: {sides}")
+    print(f"Total number of squares: {len(sides)}")
     print(f"Searching for all solutions inside {B}×{B}...")
     
     solution_count = pack_fixed_container(B, sides, preplaced)
