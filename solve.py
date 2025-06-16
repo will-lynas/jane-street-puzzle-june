@@ -45,11 +45,15 @@ class SolutionCollector(cp_model.CpSolverSolutionCallback):
     def on_solution_callback(self):
         self.solution_count += 1
         print(f"\nSolution {self.solution_count}:")
-        for i in range(len(self.sides)):
-            x_val = self.Value(self.x_vars[i])
-            y_val = self.Value(self.y_vars[i])
-            s = self.sides[i]
-            print(f"• {s}×{s} at ({x_val}, {y_val})")
+        # print position of 1x1 square
+        x_val = self.Value(self.x_vars[0])
+        y_val = self.Value(self.y_vars[0])
+        print(f"• 1×1 at ({x_val}, {y_val})")
+        # for i in range(len(self.sides)):
+        #     x_val = self.Value(self.x_vars[i])
+        #     y_val = self.Value(self.y_vars[i])
+        #     s = self.sides[i]
+        #     print(f"• {s}×{s} at ({x_val}, {y_val})")
 
 
 def pack_fixed_container(B: int, sides, preplaced):
@@ -92,12 +96,11 @@ def pack_fixed_container(B: int, sides, preplaced):
     # 5 ▸ solve for solutions
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30
-    solver.parameters.num_search_workers = 4
-    # Don't enumerate all solutions initially - just find one
-    # solver.parameters.enumerate_all_solutions = True
+    solver.parameters.num_search_workers = 1
+    solver.parameters.enumerate_all_solutions = True
     
     solution_collector = SolutionCollector(x, y, sides)
-    status = solver.Solve(model, solution_collector)
+    status = solver.SearchForAllSolutions(model, solution_collector)
     
     print(f"Solver status: {solver.StatusName(status)}")
     print(f"Solver statistics:")
