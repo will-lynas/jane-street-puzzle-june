@@ -15,3 +15,7 @@ uv run solve.py top-left
 ```
 
 The nine positions are in [`results.txt`](results.txt).
+
+## License
+
+The solver code is available under the [MIT License](LICENSE). The Jane Street puzzle PDF and images from it are not covered by this license.
